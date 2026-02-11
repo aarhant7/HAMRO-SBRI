@@ -1,24 +1,85 @@
-# Compiled class file
-*.class
+<!DOCTYPE html>
+<html lang="en">
 
-# Log file
-*.log
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HAMRO SABARI - Ride App</title>
 
-# BlueJ files
-*.ctxt
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
+  <!-- External CSS -->
+  <link rel="stylesheet" href="style.css">
+</head>
 
-# Package Files #
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
+<body>
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-replay_pid*
+  <div class="controls">
+    <h2>HAMRO SABARI</h2>
+
+    <!-- OTP -->
+    <input id="phone" placeholder="Enter phone number">
+    <button id="sendOTP">Send OTP</button>
+
+    <input id="otpInput" placeholder="Enter OTP" disabled>
+    <button id="verifyOTP" disabled>Verify OTP</button>
+
+    <hr>
+
+    <h3>Select Vehicle</h3>
+    <div class="vehicle-list">
+      <div class="vehicle active" data-type="bike">Bike</div>
+      <div class="vehicle" data-type="car">Car</div>
+      <div class="vehicle" data-type="luxury">Luxury</div>
+      <div class="vehicle" data-type="van">Van</div>
+    </div>
+    <p>Selected Vehicle: <span id="selectedVehicle">bike</span></p>
+
+    <hr>
+
+    <h3>Pickup & Drop</h3>
+    <input id="pickupSearch" placeholder="Pickup location" disabled>
+    <button id="pickupBtn" disabled>Set Pickup</button>
+
+    <input id="dropSearch" placeholder="Drop location" disabled>
+    <button id="dropBtn" disabled>Set Drop</button>
+
+    <hr>
+
+    <h3>Fare</h3>
+    <input id="promoCode" placeholder="Promo Code">
+    <p id="fare">Fare: —</p>
+
+    <hr>
+
+    <h3>Ride</h3>
+    <button id="requestRide">Request Ride</button>
+
+    <p id="status">Ride Status: —</p>
+
+    <hr>
+
+    <h3>Chat</h3>
+    <div id="chatBox" class="chat-box"></div>
+    <input id="chatInput" placeholder="Type message...">
+    <button id="sendChat">Send</button>
+
+    <hr>
+
+    <h3>Feedback</h3>
+    <textarea id="feedbackInput"></textarea>
+    <button id="submitFeedback">Submit Feedback</button>
+  </div>
+
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <!-- External JavaScript -->
+  <script src="script.js"></script>
+
+</body>
+
+</html>
