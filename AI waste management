@@ -1,0 +1,183 @@
+from flask import Flask, render_template, request, redirect, url_for, flash, session
+import sqlite3, os
+from model import predict_waste
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from authlib.integrations.flask_client import OAuth
+import secrets
+
+app = Flask(__name__)
+app.secret_key = secrets.token_hex(16)  # Generate a random secret key
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Flask-Login setup
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# OAuth setup
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id='YOUR_GOOGLE_CLIENT_ID',
+    client_secret='YOUR_GOOGLE_CLIENT_SECRET',
+    access_token_url='https://accounts.google.com/o/oauth2/token',
+    access_token_params=None,
+    authorize_url='https://accounts.google.com/o/oauth2/auth',
+    authorize_params=None,
+    api_base_url='https://www.googleapis.com/oauth2/v1/',
+    client_kwargs={'scope': 'openid email profile'},
+)
+facebook = oauth.register(
+    name='facebook',
+    client_id='YOUR_FACEBOOK_APP_ID',
+    client_secret='YOUR_FACEBOOK_APP_SECRET',
+    access_token_url='https://graph.facebook.com/oauth/access_token',
+    access_token_params=None,
+    authorize_url='https://www.facebook.com/dialog/oauth',
+    authorize_params=None,
+    api_base_url='https://graph.facebook.com/',
+    client_kwargs={'scope': 'email'},
+)
+
+class User(UserMixin):
+    def __init__(self, id, email, mobile=None):
+        self.id = id
+        self.email = email
+        self.mobile = mobile
+
+@login_manager.user_loader
+def load_user(user_id):
+    con = db()
+    cur = con.cursor()
+    cur.execute("SELECT id, email, mobile FROM users WHERE id = ?", (user_id,))
+    user = cur.fetchone()
+    con.close()
+    if user:
+        return User(id=user[0], email=user[1], mobile=user[2])
+    return None
+
+def db():
+    return sqlite3.connect("database.db")
+
+@app.route("/", methods=["GET", "POST"])
+@login_required
+def index():
+    result = None
+
+    if request.method == "POST":
+        file = request.files["image"]
+        path = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(path)
+
+        result = predict_waste(path)
+
+        lat = request.form.get("lat")
+        lon = request.form.get("lon")
+
+        con = db()
+        con.execute("INSERT INTO reports (waste, lat, lon, user_id) VALUES (?, ?, ?, ?)",
+                    (result, lat, lon, current_user.id))
+        con.commit()
+        con.close()
+
+    return render_template("index.html", result=result)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        mobile = request.form.get('mobile')
+        
+        con = db()
+        cur = con.cursor()
+        if email:
+            cur.execute("SELECT id, email, mobile, password FROM users WHERE email = ?", (email,))
+        elif mobile:
+            cur.execute("SELECT id, email, mobile, password FROM users WHERE mobile = ?", (mobile,))
+        user_data = cur.fetchone()
+        con.close()
+        
+        if user_data and user_data[3] == password:  # Simple password check (hash in production)
+            user = User(id=user_data[0], email=user_data[1], mobile=user_data[2])
+            login_user(user)
+            return redirect(url_for('index'))
+        flash('Invalid credentials')
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        mobile = request.form.get('mobile')
+        password = request.form.get('password')
+        
+        con = db()
+        con.execute("INSERT INTO users (email, mobile, password) VALUES (?, ?, ?)", (email, mobile, password))
+        con.commit()
+        con.close()
+        flash('Registration successful')
+        return redirect(url_for('login'))
+    return render_template('register.html')
+
+@app.route('/login/google')
+def login_google():
+    redirect_uri = url_for('authorize_google', _external=True)
+    return google.authorize_redirect(redirect_uri)
+
+@app.route('/authorize/google')
+def authorize_google():
+    token = google.authorize_access_token()
+    resp = google.get('userinfo')
+    user_info = resp.json()
+    # Check if user exists, else create
+    con = db()
+    cur = con.cursor()
+    cur.execute("SELECT id FROM users WHERE email = ?", (user_info['email'],))
+    user_data = cur.fetchone()
+    if not user_data:
+        cur.execute("INSERT INTO users (email) VALUES (?)", (user_info['email'],))
+        con.commit()
+        user_id = cur.lastrowid
+    else:
+        user_id = user_data[0]
+    con.close()
+    user = User(id=user_id, email=user_info['email'])
+    login_user(user)
+    return redirect(url_for('index'))
+
+@app.route('/login/facebook')
+def login_facebook():
+    redirect_uri = url_for('authorize_facebook', _external=True)
+    return facebook.authorize_redirect(redirect_uri)
+
+@app.route('/authorize/facebook')
+def authorize_facebook():
+    token = facebook.authorize_access_token()
+    resp = facebook.get('me?fields=id,email')
+    user_info = resp.json()
+    # Similar to Google
+    con = db()
+    cur = con.cursor()
+    cur.execute("SELECT id FROM users WHERE email = ?", (user_info['email'],))
+    user_data = cur.fetchone()
+    if not user_data:
+        cur.execute("INSERT INTO users (email) VALUES (?)", (user_info['email'],))
+        con.commit()
+        user_id = cur.lastrowid
+    else:
+        user_id = user_data[0]
+    con.close()
+    user = User(id=user_id, email=user_info['email'])
+    login_user(user)
+    return redirect(url_for('index'))
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+if __name__ == "__main__":
+    app.run(debug=True)
